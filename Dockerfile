@@ -1,16 +1,25 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
+# Установка зависимостей для сборки TDLib
+RUN apt-get update && apt-get install -y \
+    git cmake g++ make libssl-dev zlib1g-dev gperf \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Клонирование и сборка TDLib
+WORKDIR /build
+RUN git clone https://github.com/tdlib/td.git --depth 1 && \
+    cd td && mkdir build && cd build && \
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local .. && \
+    cmake --build . --target tdjson -j$(nproc) && \
+    make install && \
+    cd / && rm -rf /build
 
-COPY app.py .
+# Установка Python TDLib биндинга
+WORKDIR /app
+RUN pip install --no-cache-dir pytdlib pillow
 
-EXPOSE 5000
+COPY tdlib_auth.py /app/
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "5000"]
+EXPOSE 8080
+
+CMD ["python3", "/app/tdlib_auth.py"]
